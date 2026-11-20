@@ -68,7 +68,8 @@ Ein regulär beendetes Match wird automatisch archiviert. UNDO auf den
 Matchball holt es aus dem Archiv zurück.
 
 **Statistik → Match-Liste**: neueste zuerst, grün = Sieg, rot = Niederlage,
-grau = abgebrochen (`abg.`). *Filter* wechselt Alle → Vollständig →
+grau = abgebrochen. Vollständige Matches zeigen die Sätze (`2:1`),
+abgebrochene den Stand beim Abbruch (`1:0`, `6:4 3:2`). *Filter* wechselt Alle → Vollständig →
 Abgebrochen. *Summe* zeigt die zusammengerechnete Statistik der gefilterten
 Matches (Siege/Niederlagen/Abbrüche), ein Tipp auf ein Match dessen
 Einzelstatistik mit Datum, Gegner und Format.

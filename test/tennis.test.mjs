@@ -255,3 +255,17 @@ test("letter picker capitalizes words and limits length", () => {
 test("date format dd.mm.yy", () => {
   assert.equal(formatDate(new Date(2026, 10, 5).getTime()), "05.11.26");
 });
+
+import { listScore } from "../utils/tennis.js";
+
+test("list score: sets for complete, standing for aborted", () => {
+  assert.equal(listScore({ status: "complete", setsWon: { me: 2, opp: 1 }, setLine: "6:4  3:6  [10:7]" }), "2:1");
+  assert.equal(listScore({ status: "aborted", setsWon: { me: 0, opp: 0 }, setLine: "1:0" }), "1:0");
+  assert.equal(listScore({ status: "aborted", setsWon: { me: 1, opp: 0 }, setLine: "6:4  3:2" }), "6:4 3:2");
+  assert.equal(listScore({ status: "aborted", setsWon: { me: 0, opp: 0 }, setLine: "6:6 TB" }), "6:6");
+
+  const m = newMatch("bo3", true, "me", 0, "X");
+  play(m, game("me"));
+  m.aborted = true;
+  assert.equal(listScore(summarize(m)), "1:0");
+});

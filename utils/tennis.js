@@ -327,3 +327,15 @@ export function appendLetter(name, letter, maxLen) {
   const startOfWord = !name.length || name[name.length - 1] === " ";
   return name + (startOfWord ? letter.toUpperCase() : letter.toLowerCase());
 }
+
+// Score shown in the match list: sets for complete matches ("2:1"),
+// the actual standing for aborted ones ("1:0", "6:4 3:2").
+export function listScore(entry) {
+  if (entry.status === "aborted") {
+    return String(entry.setLine || "")
+      .replace(/ TB$/, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+  return entry.setsWon ? entry.setsWon.me + ":" + entry.setsWon.opp : "";
+}

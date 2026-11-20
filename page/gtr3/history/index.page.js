@@ -1,20 +1,23 @@
 // Match list with filter (Alle / Vollständig / Abgebrochen).
 // Tap "Summe" for the summed statistics of the filtered matches, or a
 // match for its own statistics. Newest match first.
-import { filterEntries, formatDate } from "../../../utils/tennis";
+import { filterEntries, formatDate, listScore } from "../../../utils/tennis";
 import { loadIndex } from "../../../utils/storage";
 import { PAGES, COLORS, FILTER_LABELS, FILTER_ORDER, text, parseParam } from "../../../utils/ui";
 
 const BTN_X = px(77);
 const BTN_W = px(300);
+// Match entries are wider: they scroll through the wide middle of the screen.
+const ENTRY_X = px(57);
+const ENTRY_W = px(340);
 
 let filter = "all";
 
-function button(y, h, label, color, size, onClick) {
+function button(y, h, label, color, size, onClick, x, w) {
   return hmUI.createWidget(hmUI.widget.BUTTON, {
-    x: BTN_X,
+    x: x || BTN_X,
     y,
-    w: BTN_W,
+    w: w || BTN_W,
     h,
     radius: Math.floor(h / 2),
     normal_color: color,
@@ -26,11 +29,12 @@ function button(y, h, label, color, size, onClick) {
   });
 }
 
+// "20.11. Huber 2:1" (complete: sets) or "20.11. Huber 6:4 3:2" (aborted:
+// actual standing). Aborted entries are grey.
 function entryLabel(e) {
   const day = formatDate(e.date).slice(0, 6); // "20.11."
   const name = (e.opponent || "Gegner").slice(0, 10);
-  const sets = e.setsWon ? e.setsWon.me + ":" + e.setsWon.opp : "";
-  return day + " " + name + " " + sets + (e.status === "aborted" ? " abg." : "");
+  return day + " " + name + " " + listScore(e);
 }
 
 function entryColor(e) {
@@ -71,9 +75,18 @@ Page({
 
     let y = px(250);
     list.forEach((e) => {
-      button(y, px(72), entryLabel(e), entryColor(e), px(26), () => {
-        hmApp.gotoPage({ url: PAGES.stats, param: JSON.stringify({ from: "history", id: e.id }) });
-      });
+      button(
+        y,
+        px(72),
+        entryLabel(e),
+        entryColor(e),
+        px(24),
+        () => {
+          hmApp.gotoPage({ url: PAGES.stats, param: JSON.stringify({ from: "history", id: e.id }) });
+        },
+        ENTRY_X,
+        ENTRY_W
+      );
       y += px(82);
     });
 
