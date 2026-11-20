@@ -182,3 +182,76 @@ test("stats attribute categories to the right player", () => {
   assert.equal(st.me.returnPts, 1);
   assert.equal(st.me.returnWon, 1);
 });
+
+import {
+  summarize,
+  aggregate,
+  filterEntries,
+  upsertEntry,
+  recentOpponents,
+  appendLetter,
+  formatDate,
+} from "../utils/tennis.js";
+
+test("summary of a complete and an aborted match", () => {
+  const m = newMatch("bo1", true, "me", 1000, "Huber");
+  play(m, games("me", 6));
+  const sum = summarize(m);
+  assert.equal(sum.status, "complete");
+  assert.equal(sum.winner, "me");
+  assert.equal(sum.opponent, "Huber");
+  assert.equal(sum.setLine, "6:0");
+  assert.equal(sum.me.points, 24);
+
+  const a = newMatch("bo3", true, "me", 2000, "");
+  play(a, games("me", 3) + "mm");
+  a.aborted = true;
+  const sa = summarize(a);
+  assert.equal(sa.status, "aborted");
+  assert.equal(sa.winner, null);
+  assert.equal(sa.setLine, "3:0");
+});
+
+test("filter and aggregate", () => {
+  const entries = [
+    { id: 1, date: 1, status: "complete", winner: "me", me: { points: 10, ace: 2 }, opp: { points: 5 } },
+    { id: 2, date: 2, status: "complete", winner: "opp", me: { points: 3 }, opp: { points: 9, df: 1 } },
+    { id: 3, date: 3, status: "aborted", winner: null, me: { points: 4 }, opp: { points: 4 } },
+  ];
+  assert.equal(filterEntries(entries, "complete").length, 2);
+  assert.equal(filterEntries(entries, "aborted").length, 1);
+  assert.equal(filterEntries(entries, "all").length, 3);
+  const agg = aggregate(entries);
+  assert.deepEqual([agg.count, agg.wins, agg.losses, agg.aborted], [3, 1, 1, 1]);
+  assert.equal(agg.me.points, 17);
+  assert.equal(agg.me.ace, 2);
+  assert.equal(agg.opp.df, 1);
+});
+
+test("upsert keeps newest first and replaces by id", () => {
+  let list = [];
+  list = upsertEntry(list, { id: 1, date: 10 });
+  list = upsertEntry(list, { id: 2, date: 20 });
+  list = upsertEntry(list, { id: 1, date: 10, x: 1 });
+  assert.deepEqual(list.map((e) => e.id), [2, 1]);
+  assert.equal(list[1].x, 1);
+});
+
+test("recent opponents are distinct, newest first", () => {
+  const list = [{ opponent: "Huber" }, { opponent: "" }, { opponent: "Maier" }, { opponent: "Huber" }];
+  assert.deepEqual(recentOpponents(list, 5), ["Huber", "Maier"]);
+  assert.deepEqual(recentOpponents(list, 1), ["Huber"]);
+});
+
+test("letter picker capitalizes words and limits length", () => {
+  let n = "";
+  for (const ch of "HANS MAIER") n = appendLetter(n, ch, 16);
+  assert.equal(n, "Hans Maier");
+  assert.equal(appendLetter("", " ", 16), "");
+  assert.equal(appendLetter("Ab ", " ", 16), "Ab ");
+  assert.equal(appendLetter("abc", "D", 3), "abc");
+});
+
+test("date format dd.mm.yy", () => {
+  assert.equal(formatDate(new Date(2026, 10, 5).getTime()), "05.11.26");
+});

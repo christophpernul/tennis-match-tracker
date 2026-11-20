@@ -1,5 +1,5 @@
 import { PAGES, COLORS, text, menuButton, toast } from "../../../utils/ui";
-import { loadMatch } from "../../../utils/storage";
+import { loadMatch, loadIndex } from "../../../utils/storage";
 
 const logger = DeviceRuntimeCore.HmLogger.getLogger("tennis-home");
 
@@ -24,16 +24,15 @@ Page({
     });
 
     menuButton(BTN_X, px(216), BTN_W, BTN_H, "Neues Match", COLORS.skip, () => {
-      hmApp.gotoPage({ url: PAGES.setup, param: JSON.stringify({ step: "format" }) });
+      hmApp.gotoPage({ url: PAGES.setup, param: JSON.stringify({ step: "opponent" }) });
     });
 
     menuButton(BTN_X, px(312), BTN_W, BTN_H, "Statistik", COLORS.undo, () => {
-      const m = loadMatch();
-      if (!m || !m.points.length) {
-        toast("Noch keine Daten");
+      if (!loadIndex().length) {
+        toast("Noch keine Matches");
         return;
       }
-      hmApp.gotoPage({ url: PAGES.stats, param: JSON.stringify({ from: "home" }) });
+      hmApp.gotoPage({ url: PAGES.history, param: JSON.stringify({ filter: "all" }) });
     });
   },
 });

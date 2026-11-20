@@ -4,9 +4,11 @@
 // always derived by replaying the points, so undo is just "pop".
 //
 // match = {
-//   v: 1, id, format, ad, firstServer, startedAt, finishedAt, finished,
+//   v: 1, id, opponent, format, ad, firstServer, startedAt, finishedAt,
+//   finished, aborted,
 //   points: [{ w: "me" | "opp", c: null | "ace" | "df" | "sw" | "winner" | "ue" | "fe" }]
 // }
+// finished = match won by someone OR aborted by the user.
 
 export const FORMATS = {
   bo1: { label: "1 Satz", setsToWin: 1, decidingMtb: false, mtbOnly: false },
@@ -23,18 +25,24 @@ export function other(p) {
   return p === "me" ? "opp" : "me";
 }
 
-export function newMatch(format, ad, firstServer, now) {
+export function newMatch(format, ad, firstServer, now, opponent) {
   return {
     v: 1,
     id: now,
+    opponent: opponent || "",
     format,
     ad: !!ad,
     firstServer,
     startedAt: now,
     finishedAt: null,
     finished: false,
+    aborted: false,
     points: [],
   };
+}
+
+export function opponentName(match) {
+  return (match && match.opponent) || "Gegner";
 }
 
 function zero() {
@@ -210,4 +218,112 @@ export function computeStats(match) {
     }
   }
   return { state: s, me: st.me, opp: st.opp };
+}
+
+// ---------- archive summaries ----------
+
+export const STAT_KEYS = [
+  "points",
+  "servePts",
+  "serveWon",
+  "returnPts",
+  "returnWon",
+  "ace",
+  "df",
+  "sw",
+  "winner",
+  "ue",
+  "fe",
+  "none",
+];
+
+// Compact record stored in the match index (list + stats without
+// having to load and replay every match file).
+export function summarize(match) {
+  const st = computeStats(match);
+  const s = st.state;
+  return {
+    id: match.id,
+    date: match.startedAt,
+    opponent: match.opponent || "",
+    format: match.format,
+    ad: match.ad,
+    status: match.aborted ? "aborted" : "complete",
+    winner: match.aborted ? null : s.winner,
+    setsWon: { me: s.setsWon.me, opp: s.setsWon.opp },
+    setLine: setLine(s),
+    nPoints: match.points.length,
+    me: st.me,
+    opp: st.opp,
+  };
+}
+
+export function filterEntries(entries, filter) {
+  if (filter === "complete") return entries.filter((e) => e.status === "complete");
+  if (filter === "aborted") return entries.filter((e) => e.status === "aborted");
+  return entries.slice();
+}
+
+// Sum of stats over several summaries.
+export function aggregate(entries) {
+  const me = blankStats();
+  const opp = blankStats();
+  let wins = 0;
+  let losses = 0;
+  let aborted = 0;
+  for (let i = 0; i < entries.length; i++) {
+    const e = entries[i];
+    for (let k = 0; k < STAT_KEYS.length; k++) {
+      const key = STAT_KEYS[k];
+      me[key] += (e.me && e.me[key]) || 0;
+      opp[key] += (e.opp && e.opp[key]) || 0;
+    }
+    if (e.status === "aborted") aborted += 1;
+    else if (e.winner === "me") wins += 1;
+    else if (e.winner === "opp") losses += 1;
+  }
+  return { count: entries.length, wins, losses, aborted, me, opp };
+}
+
+// Insert or replace by id, newest first.
+export function upsertEntry(entries, entry) {
+  const rest = entries.filter((e) => e.id !== entry.id);
+  rest.push(entry);
+  rest.sort((a, b) => b.date - a.date);
+  return rest;
+}
+
+// Distinct opponent names, most recent first.
+export function recentOpponents(entries, max) {
+  const seen = {};
+  const out = [];
+  for (let i = 0; i < entries.length && out.length < max; i++) {
+    const n = entries[i].opponent;
+    if (n && !seen[n]) {
+      seen[n] = true;
+      out.push(n);
+    }
+  }
+  return out;
+}
+
+function pad2(n) {
+  return n < 10 ? "0" + n : String(n);
+}
+
+// "20.11.26"
+export function formatDate(ms) {
+  const d = new Date(ms);
+  return pad2(d.getDate()) + "." + pad2(d.getMonth() + 1) + "." + pad2(d.getFullYear() % 100);
+}
+
+// Letter picker: capitalize the first letter of every word.
+export function appendLetter(name, letter, maxLen) {
+  if (name.length >= maxLen) return name;
+  if (letter === " ") {
+    if (!name.length || name[name.length - 1] === " ") return name;
+    return name + " ";
+  }
+  const startOfWord = !name.length || name[name.length - 1] === " ";
+  return name + (startOfWord ? letter.toUpperCase() : letter.toLowerCase());
 }

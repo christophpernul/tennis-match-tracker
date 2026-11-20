@@ -27,12 +27,13 @@ globalThis.hmFS = {
     return 0;
   },
   close(fd) { open.delete(fd); },
+  remove(name) { files.delete(name); return 0; },
   stat(name) {
     return files.has(name) ? [{ size: files.get(name).length, mtime: 0 }, 0] : [null, -4];
   },
 };
 
-const { saveMatch, loadMatch } = await import("../utils/storage.js");
+const { saveMatch, loadMatch, loadIndex, archiveMatch, unarchiveMatch } = await import("../utils/storage.js");
 
 test("load returns null when nothing saved", () => {
   assert.equal(loadMatch(), null);
@@ -45,4 +46,18 @@ test("save/load roundtrip incl. umlauts and emoji", () => {
   m.points.pop();
   saveMatch(m);
   assert.deepEqual(loadMatch().points, []);
+});
+
+test("archive: upsert into index, newest first, unarchive removes", () => {
+  assert.deepEqual(loadIndex(), []);
+  archiveMatch({ id: 1, points: [] }, { id: 1, date: 100, status: "complete" });
+  archiveMatch({ id: 2, points: [] }, { id: 2, date: 200, status: "aborted" });
+  archiveMatch({ id: 1, points: [] }, { id: 1, date: 100, status: "aborted" });
+  const idx = loadIndex();
+  assert.deepEqual(idx.map((e) => e.id), [2, 1]);
+  assert.equal(idx[1].status, "aborted");
+  assert.ok(files.has("m_1.json"));
+  unarchiveMatch(1);
+  assert.deepEqual(loadIndex().map((e) => e.id), [2]);
+  assert.ok(!files.has("m_1.json"));
 });

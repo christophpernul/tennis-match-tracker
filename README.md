@@ -10,6 +10,7 @@ Nutzt die 1.0-API (`hmUI`, `hmApp`, `hmFS`, `hmSetting`), **nicht** die 2.0/3.x-
 | 1 | Hello World – Toolchain | auf Gerät bestätigt |
 | 2 | Zwei-Tasten-Zähler, Undo, Screen-Keep | auf Gerät bestätigt |
 | 3 | Matchformat, Zählregeln, Kategorien, Persistenz, Statistik | gebaut, Regeln per Unit-Test geprüft, Gerätetest offen |
+| 4 | Gegnername, Match beenden/pausieren, Match-Verlauf mit Filter und Summe | gebaut, Gerätetest offen |
 
 ## Setup
 
@@ -31,14 +32,19 @@ Auf dem Handy (Zepp App):
 
 ## Bedienung
 
-**Start**: *Fortsetzen* (offenes Match), *Neues Match*, *Statistik* (letztes Match).
+**Start**: *Fortsetzen* (offenes Match), *Neues Match*, *Statistik* (Match-Verlauf).
 
 **Neues Match** (je ein Tipp pro Schritt):
-1. Format: 1 Satz · 2 Sätze + MTB · Best of 3 · Nur Match-TB
-2. Einstand: Mit Vorteil · No-Ad (entfällt bei „Nur Match-TB“)
-3. Wer schlägt auf? Ich · Gegner
+1. Gegner: *Neuer Name* · zuletzt gespielte Gegner · *Ohne Name*
+2. (bei *Neuer Name*) Buchstabenraster A–Z, `_` = Leerzeichen, `<` = löschen,
+   *Fertig*. Wortanfänge werden automatisch groß geschrieben, max. 16 Zeichen,
+   keine Umlaute (ü → ue).
+3. Format: 1 Satz · 2 Sätze + MTB · Best of 3 · Nur Match-TB
+4. Einstand: Mit Vorteil · No-Ad (entfällt bei „Nur Match-TB“)
+5. Wer schlägt auf? Ich · Gegner
 
-Ein neues Match überschreibt das gespeicherte erst, wenn es wirklich startet.
+Ist beim Start eines neuen Matches noch ein offenes Match mit Punkten
+gespeichert, wird es automatisch als *abgebrochen* archiviert.
 
 **Match-Screen**
 
@@ -48,8 +54,24 @@ Ein neues Match überschreibt das gespeicherte erst, wenn es wirklich startet.
 | Tippen rechte Hälfte (rot) / untere Taste kurz | Punkt Gegner |
 | UNDO | letzten Punkt zurücknehmen |
 | Obere Taste lang | Statistik (Taste/Wischen → zurück zum Match) |
-| Untere Taste lang | Match verlassen (bleibt gespeichert) |
+| Untere Taste lang | Menü: *Weiterspielen* · *Pausieren* · *Match beenden* |
 | Wisch nach rechts | blockiert |
+
+**Menü**: *Pausieren* verlässt das Match, es bleibt offen und kann über
+*Fortsetzen* weitergespielt werden. *Match beenden* fragt nach
+(„Ja, beenden“ liegt bewusst an anderer Stelle als „Match beenden“),
+archiviert das Match als *abgebrochen* mit aktuellem Stand und zeigt die
+Statistik. Ein Match ohne Punkte wird verworfen. Untere Taste lang schließt
+das Menü wieder.
+
+Ein regulär beendetes Match wird automatisch archiviert. UNDO auf den
+Matchball holt es aus dem Archiv zurück.
+
+**Statistik → Match-Liste**: neueste zuerst, grün = Sieg, rot = Niederlage,
+grau = abgebrochen (`abg.`). *Filter* wechselt Alle → Vollständig →
+Abgebrochen. *Summe* zeigt die zusammengerechnete Statistik der gefilterten
+Matches (Siege/Niederlagen/Abbrüche), ein Tipp auf ein Match dessen
+Einzelstatistik mit Datum, Gegner und Format.
 
 Oben: Satzstand, z. B. `6:4  3:2` (`TB` im Tiebreak, `MTB` im Match-Tiebreak).
 Gelbes `(A)` am Namen = Aufschlag. Große Zahlen = Spielstand (0/15/30/40/AD,
@@ -82,14 +104,33 @@ kurzer Klick = Aktion 1.
 
 ## Daten
 
-`/data/match.json` (über `hmFS`), nach jedem Punkt und jeder Kategorie neu
-geschrieben. Gespeichert werden nur Konfiguration + Punktliste; der Spielstand
-wird beim Laden aus den Punkten neu berechnet (Undo = letzten Punkt entfernen).
+Alles liegt im `/data`-Ordner der App (über `hmFS`):
+
+| Datei | Inhalt |
+|---|---|
+| `match.json` | aktuelles/letztes Match, nach jedem Punkt und jeder Kategorie neu geschrieben |
+| `matches.json` | Archiv-Index: ein Eintrag pro beendetem Match inkl. fertiger Statistik, neueste zuerst |
+| `m_<id>.json` | vollständiges archiviertes Match mit Punktliste |
+
+Gespeichert werden Konfiguration + Punktliste; der Spielstand wird aus den
+Punkten neu berechnet (Undo = letzten Punkt entfernen).
 
 ```json
-{ "v": 1, "format": "bo2", "ad": true, "firstServer": "me", "finished": false,
+{ "v": 1, "id": 1763632800000, "opponent": "Huber", "format": "bo2", "ad": true,
+  "firstServer": "me", "startedAt": 1763632800000, "finished": false, "aborted": false,
   "points": [{ "w": "me", "c": "ace" }, { "w": "opp", "c": null }] }
 ```
+
+Eintrag in `matches.json`:
+
+```json
+{ "id": 1763632800000, "date": 1763632800000, "opponent": "Huber", "format": "bo2",
+  "ad": true, "status": "complete", "winner": "me", "setsWon": { "me": 2, "opp": 1 },
+  "setLine": "6:4  3:6  [10:7]", "nPoints": 152, "me": { "points": 80, "ace": 3, "...": 0 },
+  "opp": { "points": 72, "...": 0 } }
+```
+
+`status` ist `complete` oder `aborted`, `date` der Matchstart (ms).
 
 Kategorien: `ace`, `df`, `sw` (Service-Winner), `winner`, `ue`, `fe`, `null`.
 In der Statistik zählen Ass/Doppelfehler/Service-Winner für den Aufschläger,
@@ -99,12 +140,13 @@ Winner für den Punktgewinner, UE/FE für den, der den Fehler gemacht hat.
 
 ```
 app.json                  Manifest, nur Target gtr3
-utils/tennis.js           Zählregeln + Statistik (reines JS, getestet)
-utils/storage.js          JSON lesen/schreiben in /data
+utils/tennis.js           Zählregeln, Statistik, Archiv-Zusammenfassung (reines JS, getestet)
+utils/storage.js          JSON lesen/schreiben in /data, Archiv
 utils/ui.js               UI-Helfer, Seiten-URLs, Vibration
 page/gtr3/home/           Startmenü
-page/gtr3/setup/          Format → Einstand → Aufschlag
-page/gtr3/match/          Spielstand, Eingabe, Kategorie-Overlay
-page/gtr3/stats/          Statistik (scrollbar)
+page/gtr3/setup/          Gegner → (Name) → Format → Einstand → Aufschlag
+page/gtr3/match/          Spielstand, Eingabe, Kategorie-Overlay, Menü
+page/gtr3/stats/          Statistik eines Matches oder Summe (scrollbar)
+page/gtr3/history/        Match-Liste mit Filter
 test/                     node --test
 ```

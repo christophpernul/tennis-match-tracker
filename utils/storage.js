@@ -52,10 +52,10 @@ function utf8Decode(bytes) {
   return s;
 }
 
-export function saveMatch(match) {
+function writeJson(file, obj) {
   try {
-    const bytes = utf8Encode(JSON.stringify(match));
-    const fd = hmFS.open(FILE, hmFS.O_WRONLY | hmFS.O_CREAT | hmFS.O_TRUNC);
+    const bytes = utf8Encode(JSON.stringify(obj));
+    const fd = hmFS.open(file, hmFS.O_WRONLY | hmFS.O_CREAT | hmFS.O_TRUNC);
     if (fd < 0) return false;
     hmFS.write(fd, bytes.buffer, 0, bytes.length);
     hmFS.close(fd);
@@ -65,19 +65,63 @@ export function saveMatch(match) {
   }
 }
 
-export function loadMatch() {
+function readJson(file) {
   try {
-    const [st, err] = hmFS.stat(FILE);
+    const [st, err] = hmFS.stat(file);
     if (err !== 0 || !st || !st.size) return null;
     const buf = new Uint8Array(st.size);
-    const fd = hmFS.open(FILE, hmFS.O_RDONLY);
+    const fd = hmFS.open(file, hmFS.O_RDONLY);
     if (fd < 0) return null;
     hmFS.read(fd, buf.buffer, 0, st.size);
     hmFS.close(fd);
-    const m = JSON.parse(utf8Decode(buf));
-    if (!m || !Array.isArray(m.points)) return null;
-    return m;
+    return JSON.parse(utf8Decode(buf));
   } catch (e) {
     return null;
+  }
+}
+
+// ---------- current match ----------
+
+export function saveMatch(match) {
+  return writeJson(FILE, match);
+}
+
+export function loadMatch() {
+  const m = readJson(FILE);
+  if (!m || !Array.isArray(m.points)) return null;
+  return m;
+}
+
+// ---------- archive ----------
+// matches.json: array of summaries (see summarize() in tennis.js), newest first.
+// m_<id>.json:  full match incl. point log, for later analysis.
+
+const INDEX = "matches.json";
+
+function matchFile(id) {
+  return "m_" + id + ".json";
+}
+
+export function loadIndex() {
+  const list = readJson(INDEX);
+  return Array.isArray(list) ? list : [];
+}
+
+export function archiveMatch(match, summary) {
+  const okFile = writeJson(matchFile(match.id), match);
+  const list = loadIndex().filter((e) => e.id !== summary.id);
+  list.push(summary);
+  list.sort((a, b) => b.date - a.date);
+  return writeJson(INDEX, list) && okFile;
+}
+
+export function unarchiveMatch(id) {
+  const list = loadIndex();
+  const rest = list.filter((e) => e.id !== id);
+  if (rest.length !== list.length) writeJson(INDEX, rest);
+  try {
+    hmFS.remove(matchFile(id));
+  } catch (e) {
+    // ignore
   }
 }

@@ -5,7 +5,11 @@ export const PAGES = {
   setup: "page/gtr3/setup/index.page",
   match: "page/gtr3/match/index.page",
   stats: "page/gtr3/stats/index.page",
+  history: "page/gtr3/history/index.page",
 };
+
+export const FILTER_LABELS = { all: "Alle", complete: "Vollständig", aborted: "Abgebrochen" };
+export const FILTER_ORDER = ["all", "complete", "aborted"];
 
 export const COLORS = {
   me: 0x1565c0,

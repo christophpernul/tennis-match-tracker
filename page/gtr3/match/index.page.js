@@ -4,7 +4,8 @@
 //   tap blue/red half or short press upper/lower key -> point me/opp
 //   UNDO                                              -> remove last point
 //   long press upper key                              -> statistics
-//   long press lower key                              -> leave (match is saved)
+//   long press lower key                              -> menu: continue /
+//                                                        pause / end match
 // After every point a category overlay opens; without a choice it closes
 // after CAT_TIMEOUT_S and the point stays without category.
 import {
@@ -13,8 +14,15 @@ import {
   pointLabels,
   setLine,
   categoryOptions,
+  opponentName,
+  summarize,
 } from "../../../utils/tennis";
-import { saveMatch, loadMatch } from "../../../utils/storage";
+import {
+  saveMatch,
+  loadMatch,
+  archiveMatch,
+  unarchiveMatch,
+} from "../../../utils/storage";
 import {
   PAGES,
   COLORS,
@@ -46,13 +54,21 @@ const L = {
   slotH: px(76),
   ovUndo: { x: px(96), y: px(338), w: px(126), h: px(70), radius: px(35), color: COLORS.undo },
   ovSkip: { x: px(232), y: px(338), w: px(126), h: px(70), radius: px(35), color: COLORS.skip },
+  // menu
+  menuHeader: { x: px(77), y: px(34), w: px(300), h: px(56) },
+  menuSlotY: [px(104), px(200), px(296)],
+  menuSlot: { x: px(77), w: px(300), h: px(84), radius: px(42) },
 };
+
+const MENU_RED = 0xef9a9a;
 
 let match = null;
 let s = null; // replayed state
 let w = {}; // widgets
 let vib = null;
 let overlay = { open: false, cats: [], timer: null, left: 0 };
+let menu = { open: false, mode: "main" };
+let oppLabel = "GEGNER";
 
 function keepAwake() {
   hmSetting.setBrightScreen(BRIGHT_SECONDS);
@@ -64,20 +80,27 @@ function persist() {
 
 function recompute() {
   s = replay(match);
-  const done = !!s.winner;
+  const done = !!s.winner || !!match.aborted;
   if (done !== match.finished) {
     match.finished = done;
     match.finishedAt = done ? Date.now() : null;
   }
 }
 
+// Keep the archive in line with the finished state: a finished match is
+// stored in the match list, an undo of the winning point removes it again.
+function syncArchive(wasFinished) {
+  if (match.finished && match.points.length) archiveMatch(match, summarize(match));
+  else if (wasFinished && !match.finished) unarchiveMatch(match.id);
+}
+
 function render() {
-  w.setLine.setProperty(hmUI.prop.TEXT, setLine(s));
+  w.setLine.setProperty(hmUI.prop.TEXT, (match.aborted ? "Abbruch " : "") + setLine(s));
   if (s.winner) {
     w.me.setProperty(hmUI.prop.TEXT, String(s.setsWon.me));
     w.opp.setProperty(hmUI.prop.TEXT, String(s.setsWon.opp));
     w.labelMe.setProperty(hmUI.prop.TEXT, s.winner === "me" ? "ICH - SIEG" : "ICH");
-    w.labelOpp.setProperty(hmUI.prop.TEXT, s.winner === "opp" ? "GEGNER - SIEG" : "GEGNER");
+    w.labelOpp.setProperty(hmUI.prop.TEXT, s.winner === "opp" ? oppLabel + " - SIEG" : oppLabel);
     w.labelMe.setProperty(hmUI.prop.COLOR, COLORS.label);
     w.labelOpp.setProperty(hmUI.prop.COLOR, COLORS.label);
     return;
@@ -87,7 +110,7 @@ function render() {
   w.opp.setProperty(hmUI.prop.TEXT, p.opp);
   const server = currentServer(s);
   w.labelMe.setProperty(hmUI.prop.TEXT, server === "me" ? "ICH (A)" : "ICH");
-  w.labelOpp.setProperty(hmUI.prop.TEXT, server === "opp" ? "GEGNER (A)" : "GEGNER");
+  w.labelOpp.setProperty(hmUI.prop.TEXT, server === "opp" ? oppLabel + " (A)" : oppLabel);
   w.labelMe.setProperty(hmUI.prop.COLOR, server === "me" ? COLORS.server : COLORS.label);
   w.labelOpp.setProperty(hmUI.prop.COLOR, server === "opp" ? COLORS.server : COLORS.label);
 }
@@ -131,7 +154,7 @@ function openOverlay(winner, server) {
   overlay.cats = categoryOptions(winner, server);
   overlay.left = CAT_TIMEOUT_S;
 
-  w.ovHeader.setProperty(hmUI.prop.TEXT, "Punkt " + (winner === "me" ? "ICH" : "GEGNER"));
+  w.ovHeader.setProperty(hmUI.prop.TEXT, "Punkt " + (winner === "me" ? "ICH" : oppLabel));
   w.ovHeader.setProperty(hmUI.prop.COLOR, winner === "me" ? 0x64b5f6 : 0xef9a9a);
   w.ovSkip.text.setProperty(hmUI.prop.TEXT, "OK " + overlay.left);
   setVisible([w.ovBackdrop, w.ovHeader, w.ovUndo.rect, w.ovUndo.text, w.ovSkip.rect, w.ovSkip.text], true);
@@ -149,11 +172,17 @@ function openOverlay(winner, server) {
   }, {});
 }
 
-function closeOverlay() {
+// Hide without the jump to the statistics.
+function hideOverlay() {
   stopTimer();
   if (!overlay.open) return;
   overlay.open = false;
   setVisible(overlayWidgets(), false);
+}
+
+function closeOverlay() {
+  if (!overlay.open) return;
+  hideOverlay();
   if (match.finished) showStats();
 }
 
@@ -163,6 +192,7 @@ function pickCategory(i) {
   if (!cat) return;
   match.points[match.points.length - 1].c = cat;
   persist();
+  if (match.finished) syncArchive(true); // update stats of the archived match
   vib.buzz(24);
   closeOverlay();
 }
@@ -170,18 +200,17 @@ function pickCategory(i) {
 // ---------- actions ----------
 
 function addPoint(who) {
-  if (overlay.open) {
-    overlay.open = false; // close without triggering the finished-jump
-    stopTimer();
-    setVisible(overlayWidgets(), false);
-  }
-  if (s.winner) {
+  if (menu.open) return;
+  hideOverlay();
+  if (match.finished) {
     vib.buzz(23);
     return;
   }
+  const was = match.finished;
   match.points.push({ w: who, c: null });
   recompute();
   persist();
+  syncArchive(was);
   render();
   vib.buzz(25);
   keepAwake();
@@ -189,18 +218,17 @@ function addPoint(who) {
 }
 
 function undo() {
-  if (overlay.open) {
-    overlay.open = false;
-    stopTimer();
-    setVisible(overlayWidgets(), false);
-  }
-  if (!match.points.length) {
+  if (menu.open) return;
+  hideOverlay();
+  if (!match.points.length || match.aborted) {
     vib.buzz(23);
     return;
   }
+  const was = match.finished;
   match.points.pop();
   recompute();
   persist();
+  syncArchive(was);
   render();
   vib.buzz(28);
   keepAwake();
@@ -210,17 +238,105 @@ function showStats() {
   hmApp.reloadPage({ url: PAGES.stats, param: JSON.stringify({ from: "match" }) });
 }
 
+// ---------- menu: continue / pause / end ----------
+
+const MENU = {
+  main: {
+    header: "Match",
+    slots: [
+      { label: "Weiterspielen", act: () => closeMenu() },
+      { label: "Pausieren", act: () => pauseMatch() },
+      { label: "Match beenden", red: true, act: () => showMenu("confirm") },
+    ],
+  },
+  // "Ja" sits at a different spot than "Match beenden", so a double tap
+  // cannot end the match by accident.
+  confirm: {
+    header: "Wirklich beenden?",
+    slots: [
+      { label: "Ja, beenden", red: true, act: () => abortMatch() },
+      null,
+      { label: "Nein", act: () => closeMenu() },
+    ],
+  },
+};
+
+function menuWidgets() {
+  const list = [w.menuBackdrop, w.menuHeader];
+  for (let i = 0; i < w.menuSlots.length; i++) list.push(w.menuSlots[i].rect, w.menuSlots[i].text);
+  return list;
+}
+
+function showMenu(mode) {
+  hideOverlay();
+  menu.open = true;
+  menu.mode = mode;
+  const def = MENU[mode];
+  w.menuHeader.setProperty(hmUI.prop.TEXT, def.header);
+  setVisible([w.menuBackdrop, w.menuHeader], true);
+  for (let i = 0; i < w.menuSlots.length; i++) {
+    const slot = def.slots[i];
+    if (slot) {
+      w.menuSlots[i].text.setProperty(hmUI.prop.TEXT, slot.label);
+      w.menuSlots[i].text.setProperty(hmUI.prop.COLOR, slot.red ? MENU_RED : COLORS.white);
+    }
+    setVisible([w.menuSlots[i].rect, w.menuSlots[i].text], !!slot);
+  }
+}
+
+function closeMenu() {
+  menu.open = false;
+  setVisible(menuWidgets(), false);
+}
+
+function menuTap(i) {
+  if (!menu.open) return;
+  const slot = MENU[menu.mode].slots[i];
+  if (slot) slot.act();
+}
+
+// Leave the match; it stays in match.json and can be resumed from home.
+function pauseMatch() {
+  closeMenu();
+  hmApp.goBack();
+}
+
+function abortMatch() {
+  closeMenu();
+  match.aborted = true;
+  recompute();
+  persist();
+  if (!match.points.length) {
+    toast("Match ohne Punkte verworfen");
+    hmApp.goBack();
+    return;
+  }
+  syncArchive(false);
+  vib.buzz(28);
+  // Replaces the match screen: back from the statistics leads home.
+  hmApp.reloadPage({ url: PAGES.stats, param: JSON.stringify({ from: "ended" }) });
+}
+
+// ---------- keys ----------
+
 function onKey(key, action) {
   const upper = key === hmApp.key.HOME; // verified: 36 = upper
   const lower = key === hmApp.key.SHORTCUT; // verified: 93 = lower
   if (!upper && !lower) return false;
   if (action === hmApp.action.LONG_PRESS) {
-    stopTimer();
-    if (upper) showStats();
-    else hmApp.goBack();
+    hideOverlay();
+    if (upper) {
+      showStats();
+    } else if (match.finished) {
+      hmApp.goBack();
+    } else if (menu.open) {
+      closeMenu();
+    } else {
+      showMenu("main");
+    }
     return true;
   }
-  if (action === hmApp.action.CLICK) addPoint(upper ? "me" : "opp");
+  if (action === hmApp.action.CLICK && !menu.open) addPoint(upper ? "me" : "opp");
   return true;
 }
 
@@ -240,6 +356,7 @@ Page({
       return;
     }
     recompute();
+    oppLabel = match.opponent ? opponentName(match).slice(0, 12) : "GEGNER";
     hmApp.setScreenKeep(true);
     keepAwake();
     vib = createVibrator();
@@ -288,6 +405,23 @@ Page({
     w.ovSkip = tapArea(L.ovSkip, { text: "OK", text_size: px(28) }, () => closeOverlay());
     setVisible(overlayWidgets(), false);
 
+    // Menu, on top of everything; hidden until long press on the lower key.
+    w.menuBackdrop = hmUI.createWidget(hmUI.widget.FILL_RECT, {
+      x: 0,
+      y: 0,
+      w: px(454),
+      h: px(454),
+      color: COLORS.black,
+    });
+    w.menuBackdrop.addEventListener(hmUI.event.CLICK_DOWN, () => {});
+    w.menuHeader = text({ ...L.menuHeader, text_size: px(32) });
+    w.menuSlots = [];
+    for (let i = 0; i < 3; i++) {
+      const rect = { ...L.menuSlot, y: L.menuSlotY[i], color: COLORS.slot };
+      w.menuSlots.push(tapArea(rect, { text_size: px(32) }, () => menuTap(i)));
+    }
+    setVisible(menuWidgets(), false);
+
     render();
   },
 
@@ -299,5 +433,6 @@ Page({
     if (vib) vib.stop();
     w = {};
     overlay = { open: false, cats: [], timer: null, left: 0 };
+    menu = { open: false, mode: "main" };
   },
 });
