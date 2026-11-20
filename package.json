@@ -4,7 +4,7 @@
   "description": "",
   "main": "app.js",
   "scripts": {
-    "test": "node --test test/tennis.test.mjs test/storage.test.mjs"
+    "test": "node --test test/tennis.test.mjs test/storage.test.mjs test/export.test.mjs"
   },
   "author": "",
   "license": "MIT",

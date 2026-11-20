@@ -33,7 +33,7 @@ globalThis.hmFS = {
   },
 };
 
-const { saveMatch, loadMatch, loadIndex, archiveMatch, unarchiveMatch } = await import("../utils/storage.js");
+const { saveMatch, loadMatch, loadIndex, archiveMatch, unarchiveMatch, loadExportState, saveExportState } = await import("../utils/storage.js");
 
 test("load returns null when nothing saved", () => {
   assert.equal(loadMatch(), null);
@@ -60,4 +60,10 @@ test("archive: upsert into index, newest first, unarchive removes", () => {
   unarchiveMatch(1);
   assert.deepEqual(loadIndex().map((e) => e.id), [2]);
   assert.ok(!files.has("m_1.json"));
+});
+
+test("export state defaults to 0 and roundtrips", () => {
+  assert.deepEqual(loadExportState(), { lastDate: 0 });
+  saveExportState({ lastDate: 123 });
+  assert.deepEqual(loadExportState(), { lastDate: 123 });
 });

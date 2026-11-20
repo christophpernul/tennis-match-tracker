@@ -64,16 +64,21 @@ Page({
       hmApp.reloadPage({ url: PAGES.history, param: JSON.stringify({ filter: next }) });
     });
 
+    // Export always covers all matches (the status column tells them apart).
+    button(px(164), px(70), "Export (QR)", COLORS.skip, px(28), () => {
+      hmApp.gotoPage({ url: PAGES.export, param: "" });
+    });
+
     if (!list.length) {
-      text({ x: px(77), y: px(180), w: px(300), h: px(60), text: "Keine Matches", color: COLORS.dim });
+      text({ x: px(77), y: px(256), w: px(300), h: px(60), text: "Keine Matches", color: COLORS.dim });
       return;
     }
 
-    button(px(164), px(70), "Summe (" + list.length + ")", COLORS.me, px(28), () => {
+    button(px(244), px(70), "Summe (" + list.length + ")", COLORS.me, px(28), () => {
       hmApp.gotoPage({ url: PAGES.stats, param: JSON.stringify({ from: "history", filter }) });
     });
 
-    let y = px(250);
+    let y = px(330);
     list.forEach((e) => {
       button(
         y,

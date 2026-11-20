@@ -125,3 +125,18 @@ export function unarchiveMatch(id) {
     // ignore
   }
 }
+
+// ---------- export state ----------
+// export.json: { lastDate } = start time of the newest match already
+// exported via "Export neue".
+
+const EXPORT_STATE = "export.json";
+
+export function loadExportState() {
+  const st = readJson(EXPORT_STATE);
+  return st && typeof st.lastDate === "number" ? st : { lastDate: 0 };
+}
+
+export function saveExportState(st) {
+  return writeJson(EXPORT_STATE, st);
+}

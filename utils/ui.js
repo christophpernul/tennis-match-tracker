@@ -6,6 +6,7 @@ export const PAGES = {
   match: "page/gtr3/match/index.page",
   stats: "page/gtr3/stats/index.page",
   history: "page/gtr3/history/index.page",
+  export: "page/gtr3/export/index.page",
 };
 
 export const FILTER_LABELS = { all: "Alle", complete: "Vollständig", aborted: "Abgebrochen" };

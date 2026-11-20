@@ -10,7 +10,9 @@ Nutzt die 1.0-API (`hmUI`, `hmApp`, `hmFS`, `hmSetting`), **nicht** die 2.0/3.x-
 | 1 | Hello World – Toolchain | auf Gerät bestätigt |
 | 2 | Zwei-Tasten-Zähler, Undo, Screen-Keep | auf Gerät bestätigt |
 | 3 | Matchformat, Zählregeln, Kategorien, Persistenz, Statistik | gebaut, Regeln per Unit-Test geprüft, Gerätetest offen |
-| 4 | Gegnername, Match beenden/pausieren, Match-Verlauf mit Filter und Summe | gebaut, Gerätetest offen |
+| 4 | Gegnername, Match beenden/pausieren, Match-Verlauf mit Filter und Summe | auf Gerät bestätigt |
+| 5 | Export als QR-Code (TSV für Google Sheets) | gebaut, Gerätetest offen |
+| 6 | Export automatisch per Side Service → Google Apps Script | geplant |
 
 ## Setup
 
@@ -93,6 +95,64 @@ Punkt (Taste) schließt es ebenfalls.
 Tasten auf der GTR 3 gemessen: obere Taste `HOME` = 36, untere `SHORTCUT` = 93,
 kurzer Klick = Aktion 1.
 
+## Export nach Google Sheets
+
+Statistik → *Export (QR)* → *Neue (n)* oder *Alle (n)*.
+
+- **Neue** = Matches, die seit dem letzten Export *gestartet* wurden.
+  **Alle** = alle archivierten Matches (unabhängig vom Listenfilter).
+- Die Uhr zeigt einen oder mehrere QR-Codes (*Seite 1/3*). Weiter mit
+  *Weiter* oder unterer Taste kurz, zurück mit oberer Taste kurz.
+- Jeden Code mit der Handykamera scannen → Text kopieren → in Google Sheets
+  in die erste freie Zeile, Spalte A, einfügen. Tabs werden automatisch zu
+  Spalten. Die Seiten der Reihe nach einfügen.
+- *Fertig* auf der letzten Seite merkt sich den Export; danach zählt *Neue*
+  erst ab dem nächsten Match.
+- Die Kopfzeile ist bei *Alle* und beim allerersten Export enthalten, bei
+  späteren *Neue*-Exporten nicht (damit sie direkt angehängt werden können).
+- Zeilen sind chronologisch (ältestes Match zuerst).
+
+Falls beim Einfügen alles in Spalte A landet (Scanner-App hat Tabs entfernt):
+*Daten → Text in Spalten aufteilen*. Lässt sich ein Code nicht scannen:
+`MAX_QR_BYTES` in `page/gtr3/export/index.page.js` verkleinern (mehr, aber
+einfachere Codes).
+
+### Spalten (Vertrag für das spätere Apps Script)
+
+Definiert in `utils/export.js` (`EXPORT_COLUMNS`). Neue Spalten nur hinten
+anhängen, bestehende nie umbenennen oder umsortieren. `id` ist eindeutig
+(Matchstart in ms) und dient später zum Verhindern doppelter Zeilen.
+
+| Spalte | Inhalt |
+|---|---|
+| `id` | eindeutige Match-ID (Startzeit, ms seit 1970) |
+| `datum` | Matchstart, Ortszeit `2026-11-20 14:30` |
+| `gegner` | Name oder leer |
+| `format` | `1 Satz`, `2 Saetze + MTB`, `Best of 3`, `Match-TB` |
+| `einstand` | `Ad` oder `No-Ad` |
+| `status` | `vollstaendig` oder `abgebrochen` |
+| `ergebnis` | `Sieg`, `Niederlage`, leer bei Abbruch |
+| `stand` | Satzstand, z. B. `6:4 3:6 [10:7]`, bei Abbruch Stand zum Zeitpunkt |
+| `saetze_ich`, `saetze_geg` | gewonnene Sätze |
+
+Danach jeweils als Paar `<name>_ich`, `<name>_geg` (Anzahl, ganze Zahlen):
+
+| name | Bedeutung |
+|---|---|
+| `punkte` | gewonnene Punkte |
+| `aufschlag_pkt` / `aufschlag_gew` | Punkte bei eigenem Aufschlag / davon gewonnen |
+| `return_pkt` / `return_gew` | Punkte bei gegnerischem Aufschlag / davon gewonnen |
+| `asse` | Asse |
+| `doppelfehler` | Doppelfehler |
+| `servicewinner` | Service-Winner |
+| `winner` | Winner |
+| `unforced` | eigene Unforced Errors |
+| `forced` | eigene Forced Errors |
+| `ohne_kategorie` | gewonnene Punkte ohne Kategorie |
+
+Prozentwerte (z. B. Aufschlagpunkte gewonnen) im Sheet berechnen:
+`=aufschlag_gew_ich / aufschlag_pkt_ich`.
+
 ## Regeln
 
 - Spiel: mit Vorteil oder No-Ad (bei 40:40 entscheidet ein Punkt), pro Match wählbar.
@@ -112,6 +172,7 @@ Alles liegt im `/data`-Ordner der App (über `hmFS`):
 | `match.json` | aktuelles/letztes Match, nach jedem Punkt und jeder Kategorie neu geschrieben |
 | `matches.json` | Archiv-Index: ein Eintrag pro beendetem Match inkl. fertiger Statistik, neueste zuerst |
 | `m_<id>.json` | vollständiges archiviertes Match mit Punktliste |
+| `export.json` | `{ lastDate }`: Start des neuesten bereits exportierten Matches |
 
 Gespeichert werden Konfiguration + Punktliste; der Spielstand wird aus den
 Punkten neu berechnet (Undo = letzten Punkt entfernen).
@@ -149,5 +210,7 @@ page/gtr3/setup/          Gegner → (Name) → Format → Einstand → Aufschla
 page/gtr3/match/          Spielstand, Eingabe, Kategorie-Overlay, Menü
 page/gtr3/stats/          Statistik eines Matches oder Summe (scrollbar)
 page/gtr3/history/        Match-Liste mit Filter
+page/gtr3/export/         Export als QR-Codes
+utils/export.js           Exportformat (TSV-Spalten), Seitenaufteilung (getestet)
 test/                     node --test
 ```
