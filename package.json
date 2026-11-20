@@ -1,0 +1,14 @@
+{
+  "name": "tennis-match-tracker",
+  "version": "1.0.0",
+  "description": "",
+  "main": "app.js",
+  "scripts": {
+    "test": "node --test test/tennis.test.mjs test/storage.test.mjs test/export.test.mjs test/apps-script.test.mjs"
+  },
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@zeppos/device-types": "^1.0.0"
+  }
+}

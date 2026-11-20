@@ -1,0 +1,66 @@
+{
+  "configVersion": "v2",
+  "app": {
+    "appId": 1093277,
+    "appName": "Tennis Tracker",
+    "appType": "app",
+    "version": {
+      "code": 8,
+      "name": "0.5.0"
+    },
+    "icon": "icon.png",
+    "vender": "zepp",
+    "description": "Tennis match score and stats tracker"
+  },
+  "permissions": [],
+  "runtime": {
+    "apiVersion": {
+      "compatible": "1.0.0",
+      "target": "1.0.1",
+      "minVersion": "1.0.0"
+    }
+  },
+  "debug": false,
+  "targets": {
+    "gtr3": {
+      "module": {
+        "page": {
+          "pages": [
+            "page/gtr3/home/index.page",
+            "page/gtr3/setup/index.page",
+            "page/gtr3/match/index.page",
+            "page/gtr3/stats/index.page",
+            "page/gtr3/history/index.page",
+            "page/gtr3/export/index.page"
+          ]
+        },
+        "app-side": {
+          "path": "app-side/index"
+        },
+        "setting": {
+          "path": "setting/index"
+        }
+      },
+      "platforms": [
+        {
+          "name": "gtr3",
+          "deviceSource": 226
+        },
+        {
+          "name": "gtr3-w",
+          "deviceSource": 227
+        }
+      ],
+      "designWidth": 454
+    }
+  },
+  "i18n": {
+    "en-US": {
+      "appName": "Tennis Tracker"
+    },
+    "de-DE": {
+      "appName": "Tennis Tracker"
+    }
+  },
+  "defaultLanguage": "en-US"
+}

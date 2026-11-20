@@ -1,0 +1,7 @@
+node_modules/
+dist/
+*.zab
+*.zpk
+.DS_Store
+.env
+.env.*
