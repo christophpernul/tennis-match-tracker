@@ -1,10 +1,11 @@
-// Export of archived matches as tab-separated text (TSV).
+// Export format of archived matches.
 //
-// TSV because Google Sheets splits pasted text into columns on tabs.
-// The column names are a stable contract: a future Google Apps Script
-// (side service -> HTTP) will send/append exactly these columns, keyed by
-// `id` so a match is never written twice. Only append new columns at the
-// end; never rename or reorder existing ones.
+// The column names are a stable contract with the Google Apps Script
+// (apps-script/Code.gs): the watch sends { columns, rows } via the side
+// service, the script writes one sheet row per match, keyed by `id` so a
+// match is never written twice. Only append new columns at the end; never
+// rename or reorder existing ones. headerLine()/rowLine() give the same
+// data as tab-separated text (pastes into Google Sheets as columns).
 //
 // Pure JS, no hm* APIs (tested in Node).
 
@@ -98,39 +99,26 @@ export function exportEntries(index, mode, lastDate) {
   return list.sort((a, b) => a.date - b.date);
 }
 
-function byteLen(str) {
-  let n = 0;
-  for (let i = 0; i < str.length; i++) {
-    const c = str.charCodeAt(i);
-    n += c < 0x80 ? 1 : c < 0x800 ? 2 : 3;
-  }
-  return n;
+export function columnNames() {
+  return EXPORT_COLUMNS.map((c) => c[0]);
 }
 
-// Split lines into QR pages of at most maxBytes (a single longer line
-// gets its own page). Lines within a page are joined with "\n".
-export function paginate(lines, maxBytes) {
-  const pages = [];
-  let cur = [];
-  let size = 0;
-  lines.forEach((line) => {
-    const add = byteLen(line) + (cur.length ? 1 : 0);
-    if (cur.length && size + add > maxBytes) {
-      pages.push(cur.join("\n"));
-      cur = [];
-      size = 0;
-    }
-    size += byteLen(line) + (cur.length ? 1 : 0);
-    cur.push(line);
+// Values of one match in column order (numbers stay numbers).
+export function rowValues(entry) {
+  return EXPORT_COLUMNS.map((c) => {
+    const v = c[1](entry);
+    return typeof v === "number" ? v : clean(v);
   });
-  if (cur.length) pages.push(cur.join("\n"));
-  return pages;
 }
 
-// Whole export as QR page texts. The header row is included when
-// `withHeader` (full export, or first export ever).
-export function buildExportPages(entries, withHeader, maxBytes) {
-  const lines = entries.map(rowLine);
-  if (withHeader && lines.length) lines.unshift(headerLine());
-  return paginate(lines, maxBytes);
+// Split into batches for the Bluetooth transfer (one request each).
+export function batches(list, size) {
+  const out = [];
+  for (let i = 0; i < list.length; i += size) out.push(list.slice(i, i + size));
+  return out;
+}
+
+// Request payload for the side service -> Apps Script.
+export function exportPayload(entries) {
+  return { version: EXPORT_VERSION, columns: columnNames(), rows: entries.map(rowValues) };
 }

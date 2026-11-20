@@ -3,16 +3,19 @@
 Mini Program für die Amazfit GTR 3 (Zepp OS 1.0, 454×454, deviceSource 226/227).
 Nutzt die 1.0-API (`hmUI`, `hmApp`, `hmFS`, `hmSetting`), **nicht** die 2.0/3.x-API.
 
+**Bedienung für Spieler: [Benutzerhandbuch](docs/BENUTZERHANDBUCH.md).**
+Diese README ist die technische Doku (Setup, Datenformat, Struktur).
+
 ## Stand
 
 | Schritt | Inhalt | Status |
 |---|---|---|
 | 1 | Hello World – Toolchain | auf Gerät bestätigt |
 | 2 | Zwei-Tasten-Zähler, Undo, Screen-Keep | auf Gerät bestätigt |
-| 3 | Matchformat, Zählregeln, Kategorien, Persistenz, Statistik | gebaut, Regeln per Unit-Test geprüft, Gerätetest offen |
+| 3 | Matchformat, Zählregeln, Kategorien, Persistenz, Statistik | auf Gerät bestätigt, Regeln per Unit-Test geprüft |
 | 4 | Gegnername, Match beenden/pausieren, Match-Verlauf mit Filter und Summe | auf Gerät bestätigt |
-| 5 | Export als QR-Code (TSV für Google Sheets) | gebaut, Gerätetest offen |
-| 6 | Export automatisch per Side Service → Google Apps Script | geplant |
+| 5 | Export per QR-Code | verworfen: QRCODE-Widget bei 280 px fehlerhaft (200 px ok), Export-Codes weiß/Absturz; Längengrenze nicht weiter untersucht |
+| 6 | Export per Side Service → Google Apps Script → Google Sheet | auf Gerät bestätigt, Apps Script per Test geprüft |
 
 ## Setup
 
@@ -22,8 +25,12 @@ npm install
 zeus login
 zeus build      # nur bauen -> dist/*.zab
 zeus preview    # baut + zeigt QR-Code
-npm test        # Unit-Tests für Zählregeln und Speicherformat (Node)
+npm test        # Unit-Tests: Zählregeln, Speicher, Export, Apps Script (Node)
 ```
+
+Eigene Werte (Script-URL, Token, Deployment-ID) gehören in `.env`; die Datei
+ist in `.gitignore` und wird nie committet (das Repository ist öffentlich).
+In `apps-script/Code.gs` bleibt im Repo immer der Platzhalter für `TOKEN`.
 
 Falls `zeus` nicht gefunden wird: `%APPDATA%\npm` zum Benutzer-PATH hinzufügen
 und VS Code neu starten.
@@ -97,31 +104,53 @@ kurzer Klick = Aktion 1.
 
 ## Export nach Google Sheets
 
-Statistik → *Export (QR)* → *Neue (n)* oder *Alle (n)*.
+Weg: Uhr → Bluetooth → Side Service in der Zepp App (Handy) → HTTPS →
+Google Apps Script → Tabellenblatt `Matches`.
 
-- **Neue** = Matches, die seit dem letzten Export *gestartet* wurden.
-  **Alle** = alle archivierten Matches (unabhängig vom Listenfilter).
-- Die Uhr zeigt einen oder mehrere QR-Codes (*Seite 1/3*). Weiter mit
-  *Weiter* oder unterer Taste kurz, zurück mit oberer Taste kurz.
-- Jeden Code mit der Handykamera scannen → Text kopieren → in Google Sheets
-  in die erste freie Zeile, Spalte A, einfügen. Tabs werden automatisch zu
-  Spalten. Die Seiten der Reihe nach einfügen.
-- *Fertig* auf der letzten Seite merkt sich den Export; danach zählt *Neue*
-  erst ab dem nächsten Match.
-- Die Kopfzeile ist bei *Alle* und beim allerersten Export enthalten, bei
-  späteren *Neue*-Exporten nicht (damit sie direkt angehängt werden können).
-- Zeilen sind chronologisch (ältestes Match zuerst).
+### Einmalige Einrichtung
 
-Falls beim Einfügen alles in Spalte A landet (Scanner-App hat Tabs entfernt):
-*Daten → Text in Spalten aufteilen*. Lässt sich ein Code nicht scannen:
-`MAX_QR_BYTES` in `page/gtr3/export/index.page.js` verkleinern (mehr, aber
-einfachere Codes).
+1. **Google Sheet anlegen** (beliebiger Name) → *Erweiterungen → Apps Script*.
+2. Den Inhalt von [`apps-script/Code.gs`](apps-script/Code.gs) komplett
+   einfügen (vorhandenen Code ersetzen).
+3. Oben `var TOKEN = "HIER-GEHEIMES-WORT-EINTRAGEN";` durch ein eigenes
+   geheimes Wort ersetzen, speichern.
+4. *Bereitstellen → Neue Bereitstellung* → Typ *Web-App*:
+   *Ausführen als*: **Ich**, *Zugriff*: **Jeder** → *Bereitstellen*,
+   Google-Konto autorisieren (Warnung „App nicht überprüft“ → *Erweitert →
+   Weiter*, es ist dein eigenes Script). Die **Web-App-URL** (endet auf
+   `/exec`) kopieren.
+   Test: URL im Browser öffnen → `{"ok":true,"info":"Tennis Tracker Export bereit"}`.
+5. **Zepp App** → Profil → GTR 3 → App-Einstellungen (bzw. *App-Liste*) →
+   *Tennis Tracker* → **Script-URL** und **Token** eintragen.
 
-### Spalten (Vertrag für das spätere Apps Script)
+Wird `Code.gs` später geändert: *Bereitstellungen verwalten → Bearbeiten →
+Version: Neue Version*, sonst läuft die alte Version weiter (URL bleibt gleich).
+
+### Export auf der Uhr
+
+Statistik → *Export* → **Neue senden** oder **Alle senden**. Die Zepp App
+muss auf dem Handy laufen (Bluetooth verbunden, Internet).
+
+- **Neue** = Matches, die nach dem letzten erfolgreichen Export gestartet
+  wurden. **Alle** = alle Matches (unabhängig vom Listenfilter).
+- Gesendet wird in Paketen zu 10 Matches; nach jedem Paket merkt sich die
+  Uhr den Fortschritt.
+- Das Script schreibt eine Zeile pro Match. Ist die `id` schon im Sheet,
+  wird die Zeile **aktualisiert** statt doppelt angelegt. *Alle senden* ist
+  also jederzeit gefahrlos.
+- Ergebnis auf der Uhr: „Fertig: x neu, y aktualisiert“. Der letzte Status
+  steht auch in den App-Einstellungen in der Zepp App („Letzter Export“).
+
+Fehlermeldungen: *Keine Script-URL* → Schritt 5; *Token falsch* → Token in
+Zepp App und `Code.gs` vergleichen; *Keine Antwort vom Handy* → Zepp App
+öffnen, Bluetooth prüfen.
+
+### Spalten (Vertrag zwischen Uhr und Apps Script)
 
 Definiert in `utils/export.js` (`EXPORT_COLUMNS`). Neue Spalten nur hinten
 anhängen, bestehende nie umbenennen oder umsortieren. `id` ist eindeutig
-(Matchstart in ms) und dient später zum Verhindern doppelter Zeilen.
+(Matchstart in ms) und verhindert doppelte Zeilen. Neue Spalten aus einer
+späteren App-Version hängt das Script automatisch hinten an.
 
 | Spalte | Inhalt |
 |---|---|
@@ -172,7 +201,7 @@ Alles liegt im `/data`-Ordner der App (über `hmFS`):
 | `match.json` | aktuelles/letztes Match, nach jedem Punkt und jeder Kategorie neu geschrieben |
 | `matches.json` | Archiv-Index: ein Eintrag pro beendetem Match inkl. fertiger Statistik, neueste zuerst |
 | `m_<id>.json` | vollständiges archiviertes Match mit Punktliste |
-| `export.json` | `{ lastDate }`: Start des neuesten bereits exportierten Matches |
+| `export.json` | `{ lastDate }`: Start des neuesten bereits gesendeten Matches |
 
 Gespeichert werden Konfiguration + Punktliste; der Spielstand wird aus den
 Punkten neu berechnet (Undo = letzten Punkt entfernen).
@@ -210,7 +239,11 @@ page/gtr3/setup/          Gegner → (Name) → Format → Einstand → Aufschla
 page/gtr3/match/          Spielstand, Eingabe, Kategorie-Overlay, Menü
 page/gtr3/stats/          Statistik eines Matches oder Summe (scrollbar)
 page/gtr3/history/        Match-Liste mit Filter
-page/gtr3/export/         Export als QR-Codes
-utils/export.js           Exportformat (TSV-Spalten), Seitenaufteilung (getestet)
+page/gtr3/export/         Export an Google Sheet (senden, Status)
+utils/export.js           Exportformat (Spalten), Pakete (getestet)
+app-side/index.js         Side Service (Handy): Daten an Apps Script senden
+setting/index.js          Einstellungen in der Zepp App: Script-URL, Token
+shared/                   Bluetooth-Messaging aus der offiziellen OS-1.0-Vorlage
+apps-script/Code.gs       Google Apps Script für das Sheet (getestet mit Fake-Sheet)
 test/                     node --test
 ```

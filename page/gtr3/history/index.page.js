@@ -65,7 +65,7 @@ Page({
     });
 
     // Export always covers all matches (the status column tells them apart).
-    button(px(164), px(70), "Export (QR)", COLORS.skip, px(28), () => {
+    button(px(164), px(70), "Export", COLORS.skip, px(28), () => {
       hmApp.gotoPage({ url: PAGES.export, param: "" });
     });
 

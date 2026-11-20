@@ -7,9 +7,11 @@ import {
   headerLine,
   rowLine,
   exportEntries,
-  paginate,
-  buildExportPages,
   isoLocal,
+  rowValues,
+  columnNames,
+  batches,
+  exportPayload,
 } from "../utils/export.js";
 
 function sample(date, opponent, aborted) {
@@ -73,21 +75,23 @@ test("export entries: oldest first, 'new' only after last export", () => {
   assert.deepEqual(exportEntries(idx, "new", 0).map((e) => e.date), [10, 20, 30]);
 });
 
-test("paginate respects the byte limit and keeps every line", () => {
-  const lines = ["a".repeat(100), "b".repeat(100), "c".repeat(100), "d".repeat(250)];
-  const pages = paginate(lines, 210);
-  assert.deepEqual(pages, ["a".repeat(100) + "\n" + "b".repeat(100), "c".repeat(100), "d".repeat(250)]);
+test("payload: columns + rows of values, numbers stay numbers", () => {
+  const e = sample(new Date(2026, 10, 20, 9, 0).getTime(), "Huber", false);
+  const p = exportPayload([e]);
+  assert.deepEqual(p.columns, columnNames());
+  assert.equal(p.rows.length, 1);
+  assert.equal(p.rows[0].length, p.columns.length);
+  const row = Object.fromEntries(p.columns.map((k, i) => [k, p.rows[0][i]]));
+  assert.equal(typeof row.id, "number");
+  assert.equal(row.punkte_ich, 4);
+  assert.equal(row.datum, "2026-11-20 09:00");
+  assert.equal(row.gegner, "Huber");
+  assert.deepEqual(rowValues(e).map(String), rowLine(e).split("\t"));
 });
 
-test("export pages: header only when requested, all rows present", () => {
-  const entries = [sample(1, "A"), sample(2, "B"), sample(3, "C"), sample(4, "D")];
-  const withH = buildExportPages(entries, true, 600).join("\n").split("\n");
-  assert.equal(withH[0], headerLine());
-  assert.equal(withH.length, 5);
-  const noH = buildExportPages(entries, false, 600).join("\n").split("\n");
-  assert.equal(noH.length, 4);
-  assert.deepEqual(buildExportPages([], true, 600), []);
-  for (const p of buildExportPages(entries, true, 600)) assert.ok(Buffer.byteLength(p) <= 600 || !p.includes("\n"));
+test("batches split evenly", () => {
+  assert.deepEqual(batches([1, 2, 3, 4, 5], 2), [[1, 2], [3, 4], [5]]);
+  assert.deepEqual(batches([], 2), []);
 });
 
 test("isoLocal pads", () => {
