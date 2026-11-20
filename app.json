@@ -5,8 +5,8 @@
     "appName": "Tennis Tracker",
     "appType": "app",
     "version": {
-      "code": 1,
-      "name": "0.1.0"
+      "code": 2,
+      "name": "0.2.0"
     },
     "icon": "icon.png",
     "vender": "zepp",
@@ -27,7 +27,9 @@
         "page": {
           "pages": [
             "page/gtr3/home/index.page",
-            "page/gtr3/counter/index.page"
+            "page/gtr3/setup/index.page",
+            "page/gtr3/match/index.page",
+            "page/gtr3/stats/index.page"
           ]
         }
       },
